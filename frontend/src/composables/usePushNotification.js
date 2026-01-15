@@ -2,9 +2,10 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { Notify } from 'quasar'
 import axios from 'axios'
 
-const API_URL = import.meta.env.API_URL || ''
+const API_URL = ''  // Empty string since we're on same origin
 
 export function usePushNotification() {
+  const isSupported = ref('serviceWorker' in navigator && 'PushManager' in window)
   const subscription = ref(null)
   const isSubscribed = ref(false)
   const permission = ref('default')
@@ -40,34 +41,44 @@ export function usePushNotification() {
       return false
     }
 
+    // If already granted, return true
     if (Notification.permission === 'granted') {
       permission.value = 'granted'
       return true
     }
 
-    if (Notification.permission !== 'denied') {
-      const result = await Notification.requestPermission()
-      permission.value = result
-
-      if (result === 'granted') {
-        Notify.create({
-          type: 'positive',
-          message: 'Notification permission granted',
-          position: 'top'
-        })
-        return true
-      } else {
-        Notify.create({
-          type: 'warning',
-          message: 'Notification permission denied',
-          position: 'top'
-        })
-        return false
-      }
+    // If already denied, show instructions
+    if (Notification.permission === 'denied') {
+      permission.value = 'denied'
+      error.value = 'Notification permission was denied. Please enable it in browser settings.'
+      Notify.create({
+        type: 'negative',
+        message: 'Notification permission denied. Please enable it in browser settings.',
+        position: 'top',
+        timeout: 5000
+      })
+      return false
     }
 
-    permission.value = 'denied'
-    return false
+    // Request permission
+    const result = await Notification.requestPermission()
+    permission.value = result
+
+    if (result === 'granted') {
+      Notify.create({
+        type: 'positive',
+        message: 'Notification permission granted',
+        position: 'top'
+      })
+      return true
+    } else {
+      Notify.create({
+        type: 'warning',
+        message: 'Notification permission denied',
+        position: 'top'
+      })
+      return false
+    }
   }
 
   /**
@@ -75,8 +86,9 @@ export function usePushNotification() {
    */
   async function getVapidPublicKey() {
     try {
-      const response = await axios.get(`${API_URL}/api/vapid-public-key`)
+      const response = await axios.get('/api/vapid-public-key')
       vapidPublicKey.value = response.data.publicKey
+      console.log('✅ Got VAPID public key')
       return response.data.publicKey
     } catch (err) {
       console.error('❌ Error getting VAPID key:', err)
@@ -119,20 +131,40 @@ export function usePushNotification() {
     error.value = null
 
     try {
+      console.log('🔔 Starting subscription process...')
+
       // Step 1: Request permission
+      console.log('Step 1: Requesting notification permission...')
       const hasPermission = await requestPermission()
       if (!hasPermission) {
         throw new Error('Notification permission denied')
       }
 
       // Step 2: Register service worker
-      const registration = await registerServiceWorker()
+      console.log('Step 2: Registering service worker...')
+      if (!('serviceWorker' in navigator)) {
+        throw new Error('Service workers are not supported by this browser')
+      }
+
+      const swReg = await navigator.serviceWorker.register('/sw.js')
+      console.log('✅ Service Worker registered:', swReg)
+      swRegistration.value = swReg
+
+      // Wait for service worker to be ready
+      await navigator.serviceWorker.ready
+      console.log('✅ Service Worker ready')
+
+      // Get the ready registration
+      const readySW = await navigator.serviceWorker.getRegistration()
+      console.log('✅ Got ready service worker registration')
 
       // Step 3: Get VAPID public key
+      console.log('Step 3: Getting VAPID public key...')
       const vapidKey = await getVapidPublicKey()
 
       // Step 4: Subscribe to push
-      const pushSubscription = await registration.pushManager.subscribe({
+      console.log('Step 4: Subscribing to push notifications...')
+      const pushSubscription = await readySW.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey)
       })
@@ -140,7 +172,8 @@ export function usePushNotification() {
       console.log('✅ Push subscription created:', pushSubscription)
 
       // Step 5: Send subscription to server
-      await axios.post(`${API_URL}/api/subscribe`, {
+      console.log('Step 5: Sending subscription to server...')
+      await axios.post('/api/subscribe', {
         subscription: pushSubscription.toJSON()
       })
 
@@ -154,6 +187,7 @@ export function usePushNotification() {
         timeout: 3000
       })
 
+      console.log('✅ Subscription complete!')
       return pushSubscription
     } catch (err) {
       console.error('❌ Subscription failed:', err)
@@ -162,7 +196,8 @@ export function usePushNotification() {
       Notify.create({
         type: 'negative',
         message: `Subscription failed: ${err.message}`,
-        position: 'top'
+        position: 'top',
+        timeout: 5000
       })
 
       throw err
