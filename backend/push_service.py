@@ -148,8 +148,17 @@ class PushNotificationService:
 
         for subscription in subscriptions:
             endpoint = subscription.get("endpoint", "unknown")
+            p256dh = subscription.get("p256dh", "")
+            auth = subscription.get("auth", "")
+            subscription_data = {
+                "endpoint": endpoint,
+                "keys": {
+                    "p256dh": p256dh,
+                    "auth": auth
+                }
+            }
             try:
-                result = self.send_notification(subscription, notification)
+                result = self.send_notification(subscription_data, notification)
                 results.append({
                     "endpoint": endpoint,
                     "status": "success",
