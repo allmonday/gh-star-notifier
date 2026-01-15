@@ -1,0 +1,30 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: github-star-notifier
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:example@example.com}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - WEBHOOK_WHITELIST=${WEBHOOK_WHITELIST:-[]}
+      - DATABASE_URL=/app/data/star_notifier.db
+    volumes:
+      - backend_data:/app/data
+    restart: unless-stopped
+    networks:
+      - github-star-notifier-network
+
+volumes:
+  backend_data:
+    driver: local
+
+networks:
+  github-star-notifier-network:
+    driver: bridge
