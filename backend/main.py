@@ -25,20 +25,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for PWA
+# Static files directory (frontend build output)
 static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    app.mount("/icons", StaticFiles(directory=os.path.join(static_dir, "icons")), name="icons")
-
-    # Serve manifest.json and sw.js
-    @app.get("/manifest.json")
-    async def manifest():
-        return FileResponse(os.path.join(static_dir, "manifest.json"))
-
-    @app.get("/sw.js")
-    async def service_worker():
-        return FileResponse(os.path.join(static_dir, "sw.js"), media_type="application/javascript")
 
 
 @app.get("/health")
@@ -287,34 +275,10 @@ async def api_info():
     }
 
 
-# Root endpoint serves SPA
-@app.get("/")
-async def root():
-    """Serve SPA index.html"""
-    index_path = os.path.join(static_dir, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    else:
-        return {
-            "message": "GitHub Star Notifier",
-            "status": "Frontend not built",
-            "hint": "Run: npm run build in ../frontend"
-        }
-
-
-# SPA fallback: serve index.html for all non-API routes (must be last)
-@app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
-    """Serve SPA index.html for all non-API routes"""
-    # Don't intercept API routes
-    if full_path.startswith("api/"):
-        raise HTTPException(status_code=404, detail="API endpoint not found")
-
-    index_path = os.path.join(static_dir, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    else:
-        raise HTTPException(status_code=404, detail="Frontend not built. Run: npm run build in ../frontend")
+# Mount static files for SPA (must be after all API routes)
+# Using html=True enables SPA fallback - returns index.html for non-file routes
+if os.path.exists(static_dir):
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="spa")
 
 
 if __name__ == "__main__":
