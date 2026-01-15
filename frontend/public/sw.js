@@ -1,7 +1,14 @@
 /* eslint-disable no-undef */
-import { precacheAndRoute } from 'workbox-precaching/precacheAndRoute'
+// Service Workers use importScripts() instead of ES6 imports
+self.addEventListener('install', (event) => {
+  console.log('🔧 Service Worker installing...')
+  self.skipWaiting()
+})
 
-precacheAndRoute(self.__WB_MANIFEST)
+self.addEventListener('activate', (event) => {
+  console.log('✅ Service Worker activated')
+  event.waitUntil(self.clients.claim())
+})
 
 // Push notification event
 self.addEventListener('push', function(event) {
