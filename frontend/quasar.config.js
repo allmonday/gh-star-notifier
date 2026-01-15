@@ -62,6 +62,10 @@ module.exports = configure(function (ctx) {
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/sw\.js$/, /workbox-.+\.js$/]
         };
+
+        // Ensure manifest is injected
+        pwaConf.injectPwaMetaTags = true
+        pwaConf.manifestFilename = 'manifest.json'
       }
     },
 
